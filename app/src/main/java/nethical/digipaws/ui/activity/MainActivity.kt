@@ -12,6 +12,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.nfc.NfcAdapter
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
@@ -82,6 +83,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var selectBlockedAppsLauncher: ActivityResultLauncher<Intent>
 
     private lateinit var selectFocusModeUnblockedAppsLauncher: ActivityResultLauncher<Intent>
+
+    private lateinit var selectNFCBlockedAppsLauncher: ActivityResultLauncher<Intent>
 
     private lateinit var selectOverlayAppsLauncher: ActivityResultLauncher<Intent>
 
@@ -210,6 +213,16 @@ class MainActivity : AppCompatActivity() {
                     val selectedApps = result.data?.getStringArrayListExtra("SELECTED_APPS")
                     selectedApps?.let {
                         savedPreferencesLoader.saveFocusModeSelectedApps(selectedApps)
+                    }
+                }
+            }
+
+        selectNFCBlockedAppsLauncher =
+            registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+                if (result.resultCode == RESULT_OK) {
+                    val selectedApps = result.data?.getStringArrayListExtra("SELECTED_APPS")
+                    selectedApps?.let {
+                        savedPreferencesLoader.saveNFCFocusSelectedApps(selectedApps.toSet())
                     }
                 }
             }
@@ -393,6 +406,33 @@ class MainActivity : AppCompatActivity() {
                 "start_focus_mode"
             )
 
+        }
+
+        // NFC Focus button handlers
+        binding.btnBindNfcTag.setOnClickListener {
+            val intent = Intent(this, BindNFCTagActivity::class.java)
+            startActivity(intent, options.toBundle())
+        }
+        
+        binding.btnSelectNfcBlockedApps.setOnClickListener {
+            val intent = Intent(this, SelectAppsActivity::class.java)
+            intent.putStringArrayListExtra(
+                "PRE_SELECTED_APPS", 
+                ArrayList(savedPreferencesLoader.loadNFCFocusSelectedApps())
+            )
+            selectNFCBlockedAppsLauncher.launch(intent, options)
+        }
+        
+        binding.switchRequireSameTag.setOnCheckedChangeListener { _, isChecked ->
+            savedPreferencesLoader.saveNFCRequireSameTag(isChecked)
+        }
+        
+        binding.switchAutoRearm.setOnCheckedChangeListener { _, isChecked ->
+            savedPreferencesLoader.saveNFCAutoRearm(isChecked)
+        }
+        
+        binding.nfcFocusStatusChip.setOnClickListener {
+            makeAccessibilityInfoDialog("App Blocker", AppBlockerService::class.java)
         }
 
         // listeners for turn on/ off buttons
@@ -642,6 +682,51 @@ class MainActivity : AppCompatActivity() {
                     val isFocusedModeOn = savedPreferencesLoader.getFocusModeData().isTurnedOn
                     binding.selectFocusBlockedApps.isEnabled = !isFocusedModeOn
                     binding.startFocusMode.isEnabled = !isFocusedModeOn
+                }
+
+                // NFC Focus status updates
+                val nfcAdapter = NfcAdapter.getDefaultAdapter(this@MainActivity)
+                val isNFCAvailable = nfcAdapter != null && nfcAdapter.isEnabled
+                val nfcTagBound = savedPreferencesLoader.getNFCTagKey() != null
+                val isNFCActive = savedPreferencesLoader.getNFCActive()
+                
+                binding.apply {
+                    when {
+                        !isNFCAvailable -> {
+                            nfcFocusStatusChip.text = getString(R.string.nfc_unavailable)
+                            nfcFocusStatusChip.setChipIconResource(R.drawable.baseline_warning_24)
+                            nfcFocusWarning.visibility = View.VISIBLE
+                            nfcFocusWarning.text = getString(R.string.nfc_unavailable)
+                        }
+                        !nfcTagBound -> {
+                            nfcFocusStatusChip.text = getString(R.string.not_set)
+                            nfcFocusStatusChip.setChipIconResource(R.drawable.baseline_warning_24)
+                            nfcFocusWarning.visibility = View.GONE
+                        }
+                        isNFCActive -> {
+                            nfcFocusStatusChip.text = getString(R.string.active)
+                            nfcFocusStatusChip.chipIcon = null
+                            nfcFocusWarning.visibility = View.GONE
+                        }
+                        else -> {
+                            nfcFocusStatusChip.text = getString(R.string.ready)
+                            nfcFocusStatusChip.chipIcon = null
+                            nfcFocusWarning.visibility = View.GONE
+                        }
+                    }
+                    
+                    // Enable/disable NFC card controls based on accessibility and NFC availability
+                    val nfcControlsEnabled = isAppBlockerOn && isNFCAvailable
+                    btnBindNfcTag.isEnabled = nfcControlsEnabled
+                    btnSelectNfcBlockedApps.isEnabled = nfcControlsEnabled && nfcTagBound
+                    switchRequireSameTag.isEnabled = nfcControlsEnabled && nfcTagBound
+                    switchAutoRearm.isEnabled = nfcControlsEnabled && nfcTagBound
+                    
+                    // Update switches state
+                    if (nfcTagBound) {
+                        switchRequireSameTag.isChecked = savedPreferencesLoader.getNFCRequireSameTag()
+                        switchAutoRearm.isChecked = savedPreferencesLoader.getNFCAutoRearm()
+                    }
                 }
 
                 if(isGeneralSettingsOn){

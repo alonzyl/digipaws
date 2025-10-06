@@ -322,4 +322,65 @@ class SavedPreferencesLoader(private val context: Context) {
             context.getSharedPreferences("grayscale", Context.MODE_PRIVATE)
         sharedPreferences.edit().putStringSet("apps", apps).apply()
     }
+
+    // NFC Focus methods
+    fun saveNFCTagKey(tagKey: String) {
+        val sharedPreferences = context.getSharedPreferences("nfc_focus", Context.MODE_PRIVATE)
+        sharedPreferences.edit().putString("tag_key", tagKey).apply()
+    }
+
+    fun getNFCTagKey(): String? {
+        val sharedPreferences = context.getSharedPreferences("nfc_focus", Context.MODE_PRIVATE)
+        return sharedPreferences.getString("tag_key", null)
+    }
+
+    fun saveNFCRequireSameTag(require: Boolean) {
+        val sharedPreferences = context.getSharedPreferences("nfc_focus", Context.MODE_PRIVATE)
+        sharedPreferences.edit().putBoolean("require_same_tag", require).apply()
+    }
+
+    fun getNFCRequireSameTag(): Boolean {
+        val sharedPreferences = context.getSharedPreferences("nfc_focus", Context.MODE_PRIVATE)
+        return sharedPreferences.getBoolean("require_same_tag", true)
+    }
+
+    fun saveNFCActive(active: Boolean) {
+        val sharedPreferences = context.getSharedPreferences("nfc_focus", Context.MODE_PRIVATE)
+        sharedPreferences.edit().putBoolean("active", active).apply()
+    }
+
+    fun getNFCActive(): Boolean {
+        val sharedPreferences = context.getSharedPreferences("nfc_focus", Context.MODE_PRIVATE)
+        return sharedPreferences.getBoolean("active", false)
+    }
+
+    fun saveNFCActiveTagKey(tagKey: String?) {
+        val sharedPreferences = context.getSharedPreferences("nfc_focus", Context.MODE_PRIVATE)
+        sharedPreferences.edit().putString("active_tag_key", tagKey).apply()
+    }
+
+    fun getNFCActiveTagKey(): String? {
+        val sharedPreferences = context.getSharedPreferences("nfc_focus", Context.MODE_PRIVATE)
+        return sharedPreferences.getString("active_tag_key", null)
+    }
+
+    fun saveNFCAutoRearm(autoRearm: Boolean) {
+        val sharedPreferences = context.getSharedPreferences("nfc_focus", Context.MODE_PRIVATE)
+        sharedPreferences.edit().putBoolean("auto_rearm", autoRearm).apply()
+    }
+
+    fun getNFCAutoRearm(): Boolean {
+        val sharedPreferences = context.getSharedPreferences("nfc_focus", Context.MODE_PRIVATE)
+        return sharedPreferences.getBoolean("auto_rearm", true)
+    }
+
+    fun loadNFCFocusSelectedApps(): Set<String> {
+        val sharedPreferences = context.getSharedPreferences("nfc_focus", Context.MODE_PRIVATE)
+        return sharedPreferences.getStringSet("selected_apps", emptySet()) ?: emptySet()
+    }
+
+    fun saveNFCFocusSelectedApps(apps: Set<String>) {
+        val sharedPreferences = context.getSharedPreferences("nfc_focus", Context.MODE_PRIVATE)
+        sharedPreferences.edit().putStringSet("selected_apps", apps).apply()
+    }
 }

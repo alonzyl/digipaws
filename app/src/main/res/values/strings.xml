@@ -172,4 +172,23 @@
     <string name="join_telegram">Join Telegram</string>
     <string name="guide">Guide</string>
     <string name="go_back">Go back</string>
+    
+    <!-- NFC Focus strings -->
+    <string name="nfc_focus">NFC Focus</string>
+    <string name="not_set">Not Set</string>
+    <string name="ready">Ready</string>
+    <string name="active">Active</string>
+    <string name="bind_nfc_tag">Bind NFC Tag</string>
+    <string name="require_same_tag_to_stop">Require same tag to stop</string>
+    <string name="auto_rearm_on_screen_off">Auto-rearm on screen off</string>
+    <string name="nfc_unavailable">NFC unavailable or disabled</string>
+    <string name="nfc_bind_tag_title">Bind NFC Tag</string>
+    <string name="nfc_bind_instructions">Hold your NFC tag near the phone to bind it</string>
+    <string name="nfc_bind_success">Tag bound successfully!</string>
+    <string name="nfc_bind_error">Failed to bind NFC tag</string>
+    <string name="nfc_tag_bound">Tag: ...%1$s</string>
+    <string name="nfc_focus_enabled">Focus enabled via NFC</string>
+    <string name="nfc_focus_disabled">Focus disabled via NFC</string>
+    <string name="nfc_wrong_tag">Wrong NFC tag - cannot stop focus</string>
+    <string name="nfc_not_available_body">NFC is not available on this device or is currently disabled. Please enable NFC in device settings to use this feature.</string>
 </resources>
