@@ -431,6 +431,17 @@ class MainActivity : AppCompatActivity() {
             savedPreferencesLoader.saveNFCAutoRearm(isChecked)
         }
         
+        binding.btnStartNfcFocus.setOnClickListener {
+            val nfcFocusToggle = nethical.digipaws.utils.NFCFocusToggle(this)
+            nfcFocusToggle.startManualFocus()
+        }
+        
+        binding.btnSetupNfcAutoFocus.setOnClickListener {
+            val intent = Intent(this, nethical.digipaws.ui.activity.TimedActionActivity::class.java)
+            intent.putExtra("selected_mode", nethical.digipaws.ui.activity.TimedActionActivity.MODE_NFC_AUTO_FOCUS)
+            startActivity(intent, options.toBundle())
+        }
+        
         binding.nfcFocusStatusChip.setOnClickListener {
             makeAccessibilityInfoDialog("App Blocker", AppBlockerService::class.java)
         }
@@ -704,7 +715,13 @@ class MainActivity : AppCompatActivity() {
                             nfcFocusWarning.visibility = View.GONE
                         }
                         isNFCActive -> {
-                            nfcFocusStatusChip.text = getString(R.string.active)
+                            val startMethod = savedPreferencesLoader.getNFCFocusStartMethod()
+                            val statusText = when (startMethod) {
+                                "MANUAL_BUTTON" -> "Active (Manual)"
+                                "AUTO_SCHEDULE" -> "Active (Scheduled)"
+                                else -> getString(R.string.active)
+                            }
+                            nfcFocusStatusChip.text = statusText
                             nfcFocusStatusChip.chipIcon = null
                             nfcFocusWarning.visibility = View.GONE
                         }
@@ -719,6 +736,8 @@ class MainActivity : AppCompatActivity() {
                     val nfcControlsEnabled = isAppBlockerOn && isNFCAvailable
                     btnBindNfcTag.isEnabled = nfcControlsEnabled
                     btnSelectNfcBlockedApps.isEnabled = nfcControlsEnabled && nfcTagBound
+                    btnStartNfcFocus.isEnabled = nfcControlsEnabled && nfcTagBound && !isNFCActive
+                    btnSetupNfcAutoFocus.isEnabled = nfcControlsEnabled && nfcTagBound
                     switchRequireSameTag.isEnabled = nfcControlsEnabled && nfcTagBound
                     switchAutoRearm.isEnabled = nfcControlsEnabled && nfcTagBound
                     

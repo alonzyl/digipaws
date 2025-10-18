@@ -226,6 +226,24 @@
                     android:enabled="false"
                     android:text="@string/select_blocked_apps" />
 
+                <Button
+                    android:id="@+id/btn_start_nfc_focus"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:enabled="false"
+                    android:text="@string/start_nfc_focus" />
+
+                <Button
+                    android:id="@+id/btn_setup_nfc_auto_focus"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:enabled="false"
+                    android:text="@string/setup_nfc_auto_focus" />
+
                 <androidx.constraintlayout.widget.ConstraintLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"

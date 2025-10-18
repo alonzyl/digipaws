@@ -383,4 +383,63 @@ class SavedPreferencesLoader(private val context: Context) {
         val sharedPreferences = context.getSharedPreferences("nfc_focus", Context.MODE_PRIVATE)
         sharedPreferences.edit().putStringSet("selected_apps", apps).apply()
     }
+
+    fun saveNFCFocusStartMethod(method: String?) {
+        val sharedPreferences = context.getSharedPreferences("nfc_focus", Context.MODE_PRIVATE)
+        sharedPreferences.edit().putString("start_method", method).apply()
+    }
+
+    fun getNFCFocusStartMethod(): String? {
+        val sharedPreferences = context.getSharedPreferences("nfc_focus", Context.MODE_PRIVATE)
+        return sharedPreferences.getString("start_method", null)
+    }
+
+    fun saveNFCAutoFocusSchedules(schedules: MutableList<TimedActionActivity.AutoTimedActionItem>) {
+        val sharedPreferences = context.getSharedPreferences("nfc_focus", Context.MODE_PRIVATE)
+        val editor = sharedPreferences.edit()
+        val gson = Gson()
+
+        val json = gson.toJson(schedules)
+
+        editor.putString("auto_focus_schedules", json)
+        editor.apply()
+    }
+
+    fun loadNFCAutoFocusSchedules(): MutableList<TimedActionActivity.AutoTimedActionItem> {
+        val sharedPreferences = context.getSharedPreferences("nfc_focus", Context.MODE_PRIVATE)
+        val gson = Gson()
+
+        val json = sharedPreferences.getString("auto_focus_schedules", null)
+
+        if (json.isNullOrEmpty()) return mutableListOf()
+
+        val type = object : TypeToken<MutableList<TimedActionActivity.AutoTimedActionItem>>() {}.type
+        return gson.fromJson(json, type)
+    }
+
+    /**
+     * Save the timestamp when NFC auto-focus schedules were ended via NFC scan.
+     * This is used to suppress schedules for the rest of the day.
+     */
+    fun saveNFCAutoFocusSuppressedUntil(timestamp: Long) {
+        val sharedPreferences = context.getSharedPreferences("nfc_focus", Context.MODE_PRIVATE)
+        sharedPreferences.edit().putLong("suppressed_until", timestamp).apply()
+    }
+
+    /**
+     * Get the timestamp until which NFC auto-focus schedules should be suppressed.
+     * Returns 0 if not suppressed.
+     */
+    fun getNFCAutoFocusSuppressedUntil(): Long {
+        val sharedPreferences = context.getSharedPreferences("nfc_focus", Context.MODE_PRIVATE)
+        return sharedPreferences.getLong("suppressed_until", 0)
+    }
+
+    /**
+     * Clear the suppression timestamp (typically called at midnight or when schedules change)
+     */
+    fun clearNFCAutoFocusSuppression() {
+        val sharedPreferences = context.getSharedPreferences("nfc_focus", Context.MODE_PRIVATE)
+        sharedPreferences.edit().remove("suppressed_until").apply()
+    }
 }

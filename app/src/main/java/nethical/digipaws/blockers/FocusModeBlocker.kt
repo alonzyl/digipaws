@@ -76,19 +76,39 @@ class FocusModeBlocker : BaseBlocker() {
         val uptimeNow = SystemClock.uptimeMillis()
 
         autoFocusHours[packageName]?.forEach { (startMinutes, endMinutes) ->
-            if ((startMinutes <= endMinutes && currentMinutes in startMinutes until endMinutes) ||
-                (startMinutes > endMinutes && (currentMinutes >= startMinutes || currentMinutes < endMinutes))
-            ) {
+            // Check if this is an NFC auto-focus schedule (endMinutes == Int.MAX_VALUE)
+            if (endMinutes == Int.MAX_VALUE) {
+                // Check if NFC schedules are currently suppressed
+                if (nfcAutoFocusSuppressedUntil > System.currentTimeMillis()) {
+                    Log.d("FocusModeBlocker", "NFC auto-focus schedule suppressed until ${nfcAutoFocusSuppressedUntil}")
+                    return@forEach // Skip this schedule, continue to next
+                }
+                
+                // For NFC auto-focus: block if we're past the start time
+                if (currentMinutes >= startMinutes) {
+                    // Return Long.MAX_VALUE to indicate this should stay active until NFC scan
+                    return Long.MAX_VALUE
+                }
+            } else {
+                // Regular auto-focus logic with start and end times
+                if ((startMinutes <= endMinutes && currentMinutes in startMinutes until endMinutes) ||
+                    (startMinutes > endMinutes && (currentMinutes >= startMinutes || currentMinutes < endMinutes))
+                ) {
+                    // Convert endMinutes to uptimeMillis
+                    val diffMinutes = endMinutes - currentMinutes
+                    val endTimeMillis = uptimeNow + (diffMinutes * 60 * 1000)
 
-                // Convert endMinutes to uptimeMillis
-                val diffMinutes = endMinutes - currentMinutes
-                val endTimeMillis = uptimeNow + (diffMinutes * 60 * 1000)
-
-                return endTimeMillis
+                    return endTimeMillis
+                }
             }
         }
         return null
     }
+
+    /**
+     * Set the suppression timestamp for NFC auto-focus schedules
+     */
+    var nfcAutoFocusSuppressedUntil: Long = 0
 
 
     fun refreshCheatHoursData(focusData: List<TimedActionActivity.AutoTimedActionItem>) {
@@ -97,6 +117,11 @@ class FocusModeBlocker : BaseBlocker() {
             val startTime = item.startTimeInMins
             val endTime = item.endTimeInMins
             val packageNames: ArrayList<String> = item.packages
+            
+            // Skip NFC auto-focus schedules - they're handled separately
+            if (endTime == Int.MAX_VALUE) {
+                return@forEach
+            }
 
             packageNames.forEach { packageName ->
 

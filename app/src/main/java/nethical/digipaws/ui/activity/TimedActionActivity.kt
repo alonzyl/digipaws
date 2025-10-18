@@ -30,6 +30,7 @@ class TimedActionActivity : AppCompatActivity() {
     companion object {
         const val MODE_APP_BLOCKER_CHEAT_HOURS = 1
         const val MODE_AUTO_FOCUS = 2
+        const val MODE_NFC_AUTO_FOCUS = 3
     }
 
     private lateinit var binding: ActivityAddTimedActionActivityBinding
@@ -65,6 +66,8 @@ class TimedActionActivity : AppCompatActivity() {
             }
 
             MODE_AUTO_FOCUS -> timedActionList = savedPreferencesLoader.loadAutoFocusHoursList()
+            
+            MODE_NFC_AUTO_FOCUS -> timedActionList = savedPreferencesLoader.loadNFCAutoFocusSchedules()
         }
         selectUnblockedAppsLauncher =
             registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -89,7 +92,6 @@ class TimedActionActivity : AppCompatActivity() {
     @SuppressLint("ClickableViewAccessibility", "SetTextI18n")
     private fun makeCheatHoursDialog() {
 
-
         dialogAddToTimedActionBinding = DialogAddTimedActionBinding.inflate(layoutInflater)
 
         val startTime = TimeRangePicker.Time(6, 30)
@@ -104,6 +106,13 @@ class TimedActionActivity : AppCompatActivity() {
         dialogAddToTimedActionBinding.picker.endTimeMinutes = endTimeInMins
         dialogAddToTimedActionBinding.fromTime.text = startTime.toString()
         dialogAddToTimedActionBinding.endTime.text = endTime.toString()
+
+        // For NFC auto-focus, hide end time UI elements and set end time to sentinel value
+        if (selectedMode == MODE_NFC_AUTO_FOCUS) {
+            dialogAddToTimedActionBinding.endTime.visibility = android.view.View.GONE
+            dialogAddToTimedActionBinding.textView8.visibility = android.view.View.GONE
+            endTimeInMins = Int.MAX_VALUE // Sentinel value meaning "ends with NFC scan"
+        }
 
         dialogAddToTimedActionBinding.picker.setOnTouchListener { v, event ->
             // Disable ScrollView's touch interception when interacting with the picker
@@ -127,9 +136,12 @@ class TimedActionActivity : AppCompatActivity() {
             }
 
             override fun onEndTimeChange(endTime: TimeRangePicker.Time) {
-                dialogAddToTimedActionBinding.endTime.text =
-                    dialogAddToTimedActionBinding.picker.endTime.toString()
-                endTimeInMins = dialogAddToTimedActionBinding.picker.endTimeMinutes
+                // Only update end time for non-NFC auto-focus modes
+                if (selectedMode != MODE_NFC_AUTO_FOCUS) {
+                    dialogAddToTimedActionBinding.endTime.text =
+                        dialogAddToTimedActionBinding.picker.endTime.toString()
+                    endTimeInMins = dialogAddToTimedActionBinding.picker.endTimeMinutes
+                }
             }
 
             override fun onDurationChange(duration: TimeRangePicker.TimeDuration) {
@@ -142,9 +154,15 @@ class TimedActionActivity : AppCompatActivity() {
                 dialogAddToTimedActionBinding.btnSelectUnblockedApps.text = "Select Apps to Block"
             }
 
+            MODE_NFC_AUTO_FOCUS -> {
+                dialogAddToTimedActionBinding.timedTitle.text = "Setup NFC Auto-Focus"
+                dialogAddToTimedActionBinding.btnSelectUnblockedApps.visibility = android.view.View.GONE
+                dialogAddToTimedActionBinding.fromTime.text = "Start Time: ${startTime}"
+            }
+
             MODE_APP_BLOCKER_CHEAT_HOURS -> {
                 dialogAddToTimedActionBinding.timedTitle.text = "Specify Cheat Hours"
-                dialogAddToTimedActionBinding.timedTitle.text = "Specify Apps to Unblock"
+                dialogAddToTimedActionBinding.btnSelectUnblockedApps.text = "Specify Apps to Unblock"
             }
         }
 
@@ -173,7 +191,7 @@ class TimedActionActivity : AppCompatActivity() {
                         getString(R.string.please_type_a_title),
                         Toast.LENGTH_SHORT
                     ).show()
-                } else if (selectedUnblockedApps?.isEmpty() == true) {
+                } else if (selectedMode != MODE_NFC_AUTO_FOCUS && selectedUnblockedApps?.isEmpty() == true) {
                     Toast.makeText(
                         this,
                         getString(R.string.please_select_a_few_apps), Toast.LENGTH_SHORT
@@ -185,7 +203,7 @@ class TimedActionActivity : AppCompatActivity() {
                             dialogAddToTimedActionBinding.cheatHourTitle.text.toString(),
                             startTimeInMins!!,
                             endTimeInMins!!,
-                            selectedUnblockedApps!!
+                            if (selectedMode == MODE_NFC_AUTO_FOCUS) arrayListOf() else selectedUnblockedApps!!
                         )
                     )
                     binding.recyclerView2.adapter?.notifyItemInserted(timedActionList.size)
@@ -212,7 +230,6 @@ class TimedActionActivity : AppCompatActivity() {
             fun bind(item: AutoTimedActionItem) {
                 binding.cheatHourTitle.text = item.title
                 val convertedStartTime = TimeTools.convertMinutesTo24Hour(item.startTimeInMins)
-                val convertedEndTIme = TimeTools.convertMinutesTo24Hour(item.endTimeInMins)
 
                 binding.removeCheatHour.setOnClickListener {
                     timedActionList.removeAt(layoutPosition)
@@ -220,14 +237,21 @@ class TimedActionActivity : AppCompatActivity() {
                     saveList()
                 }
 
-                binding.cheatTimings.text =
-                    getString(
-                        R.string.cheat_timings,
-                        convertedStartTime.first,
-                        convertedStartTime.second,
-                        convertedEndTIme.first,
-                        convertedEndTIme.second
-                    )
+                // Check if this is an NFC auto-focus schedule (endTimeInMins == Int.MAX_VALUE)
+                if (item.endTimeInMins == Int.MAX_VALUE) {
+                    binding.cheatTimings.text = "Starts at ${convertedStartTime.first}:${convertedStartTime.second} - Ends with NFC scan"
+                } else {
+                    val convertedEndTIme = TimeTools.convertMinutesTo24Hour(item.endTimeInMins)
+                    binding.cheatTimings.text =
+                        getString(
+                            R.string.cheat_timings,
+                            convertedStartTime.first,
+                            convertedStartTime.second,
+                            convertedEndTIme.first,
+                            convertedEndTIme.second
+                        )
+                }
+                
                 item.packages.forEach { packageName ->
                     binding.selectedApps.text =
                         binding.selectedApps.text.toString() + " " + packageName
@@ -263,6 +287,11 @@ class TimedActionActivity : AppCompatActivity() {
                 savedPreferencesLoader.saveAutoFocusHoursList(timedActionList)
                 sendBroadcast(Intent(AppBlockerService.INTENT_ACTION_REFRESH_FOCUS_MODE))
             }
+            
+            MODE_NFC_AUTO_FOCUS -> {
+                savedPreferencesLoader.saveNFCAutoFocusSchedules(timedActionList)
+                sendBroadcast(Intent(AppBlockerService.INTENT_ACTION_REFRESH_FOCUS_MODE))
+            }
         }
     }
 
@@ -270,7 +299,7 @@ class TimedActionActivity : AppCompatActivity() {
         val title: String,
         val startTimeInMins: Int,
         val endTimeInMins: Int,
-        val packages: ArrayList<String>,
+        val packages: ArrayList<String> = arrayListOf(),
         val isProceedHidden: Boolean = false
     )
 

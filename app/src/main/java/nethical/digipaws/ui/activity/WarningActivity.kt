@@ -36,9 +36,15 @@ class WarningActivity : AppCompatActivity() {
         binding.minsPicker.setValue(3)
         binding.minsPicker.minValue = 2
         val isDialogCancelable =
-            mode != Constants.WARNING_SCREEN_MODE_APP_BLOCKER || isHomePressRequested
+            mode == Constants.WARNING_SCREEN_MODE_FOCUS_MODE || (mode != Constants.WARNING_SCREEN_MODE_APP_BLOCKER || isHomePressRequested)
 
-        if (warningScreenConfig.isProceedDisabled) {
+        // For focus mode, always hide proceed button and show focus mode message
+        if (mode == Constants.WARNING_SCREEN_MODE_FOCUS_MODE) {
+            binding.btnProceed.visibility = View.GONE
+            binding.proceedSeconds.visibility = View.GONE
+            binding.minsPicker.visibility = View.GONE
+            binding.warningMsg.text = "This app is currently blocked by Focus Mode"
+        } else if (warningScreenConfig.isProceedDisabled) {
             binding.btnProceed.visibility = View.GONE
             binding.proceedSeconds.visibility = View.GONE
 
@@ -70,10 +76,15 @@ class WarningActivity : AppCompatActivity() {
                 finishAffinity()
             }
             .show()
-        binding.warningMsg.text = warningScreenConfig.message
-        binding.minsPicker.setValue(warningScreenConfig.timeInterval / 60000)
+        
+        // Set message based on mode
+        if (mode != Constants.WARNING_SCREEN_MODE_FOCUS_MODE) {
+            binding.warningMsg.text = warningScreenConfig.message
+            binding.minsPicker.setValue(warningScreenConfig.timeInterval / 60000)
+        }
+        
         binding.btnCancel.setOnClickListener {
-            if (mode == Constants.WARNING_SCREEN_MODE_APP_BLOCKER || isHomePressRequested) {
+            if (mode == Constants.WARNING_SCREEN_MODE_APP_BLOCKER || mode == Constants.WARNING_SCREEN_MODE_FOCUS_MODE || isHomePressRequested) {
                 val intent = Intent(Intent.ACTION_MAIN)
                 intent.addCategory(Intent.CATEGORY_HOME)
                 intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK)

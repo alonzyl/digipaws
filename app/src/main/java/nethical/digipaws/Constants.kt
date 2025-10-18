@@ -9,6 +9,7 @@ class Constants {
         // available types of warning screen
         const val WARNING_SCREEN_MODE_VIEW_BLOCKER = 1
         const val WARNING_SCREEN_MODE_APP_BLOCKER = 2
+        const val WARNING_SCREEN_MODE_FOCUS_MODE = 3
 
         // available types for focus mode
         const val FOCUS_MODE_BLOCK_ALL_EX_SELECTED = 1

@@ -56,23 +56,49 @@ class AppBlockerService : BaseBlockingService() {
 
     private var updateRunnable: Runnable? = null
 
-
-
     private var lastPackage = ""
+    private var lastBlockedPackage = ""
+    private var lastBlockedTime = 0L
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         val packageName = event?.packageName.toString()
-        if (lastPackage == packageName || packageName == getPackageName()) return
+        
+        // Special handling for recently blocked apps - don't skip the check
+        val currentTime = SystemClock.uptimeMillis()
+        val isRecentlyBlocked = packageName == lastBlockedPackage && currentTime - lastBlockedTime < 5000
+        
+        if (!isRecentlyBlocked && (lastPackage == packageName || packageName == getPackageName())) return
 
         lastPackage = packageName
         Log.d("AppBlockerService", "Switched to app $packageName")
 
+        checkAppBlocking(packageName)
+    }
+
+    private fun checkAppBlocking(packageName: String) {
         val focusModeResult = focusModeBlocker.doesAppNeedToBeBlocked(packageName)
+        Log.d("AppBlockerService", "Focus mode check for $packageName: isBlocked=${focusModeResult.isBlocked}, focusData=${focusModeBlocker.focusModeData}")
         if (focusModeResult.isBlocked) {
+            val currentTime = SystemClock.uptimeMillis()
+            lastBlockedPackage = packageName
+            lastBlockedTime = currentTime
             handleFocusModeBlockerResult(focusModeResult)
             return
         }
         handleAppBlockerResult(appBlocker.doesAppNeedToBeBlocked(packageName), packageName)
+    }
+
+    private fun checkCurrentApp() {
+        try {
+            val currentPackage = rootInActiveWindow?.packageName?.toString()
+            if (currentPackage != null && currentPackage != getPackageName()) {
+                Log.d("AppBlockerService", "Checking current app after refresh: $currentPackage")
+                lastPackage = "" // Reset to force recheck
+                checkAppBlocking(currentPackage)
+            }
+        } catch (e: Exception) {
+            Log.e("AppBlockerService", "Error checking current app: $e")
+        }
     }
 
 
@@ -88,6 +114,8 @@ class AppBlockerService : BaseBlockingService() {
 
         if (!result.isBlocked) return
 
+        lastBlockedPackage = packageName
+        lastBlockedTime = SystemClock.uptimeMillis()
 
         if (appBlockerWarning.isWarningDialogHidden) {
             pressHome()
@@ -111,8 +139,14 @@ class AppBlockerService : BaseBlockingService() {
 
         if (!result.isBlocked) return
 
+        // Use warning dialog with focus mode - no proceed option
         pressHome()
-        Toast.makeText(this, "This app is currently under focus mode", Toast.LENGTH_LONG).show()
+        Thread.sleep(300)
+        val dialogIntent = Intent(this, WarningActivity::class.java)
+        dialogIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+        dialogIntent.putExtra("mode", Constants.WARNING_SCREEN_MODE_FOCUS_MODE)
+        dialogIntent.putExtra("result_id", lastPackage)
+        startActivity(dialogIntent)
     }
 
     override fun onInterrupt() {
@@ -140,8 +174,14 @@ class AppBlockerService : BaseBlockingService() {
     private val refreshReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent == null) return
+            Log.d("AppBlockerService", "Received broadcast: ${intent.action}")
             when (intent.action) {
-                INTENT_ACTION_REFRESH_FOCUS_MODE -> setupFocusMode()
+                INTENT_ACTION_REFRESH_FOCUS_MODE -> {
+                    Log.d("AppBlockerService", "Refreshing focus mode from broadcast")
+                    setupFocusMode()
+                    // Immediately check the current app after focus mode changes
+                    checkCurrentApp()
+                }
                 INTENT_ACTION_REFRESH_APP_BLOCKER -> setupAppBlocker()
                 INTENT_ACTION_REFRESH_APP_BLOCKER_COOLDOWN -> {
                     val interval =
@@ -200,10 +240,17 @@ class AppBlockerService : BaseBlockingService() {
     }
 
     fun setupFocusMode() {
-        focusModeBlocker.refreshCheatHoursData(savedPreferencesLoader.loadAutoFocusHoursList())
+        // Load regular auto-focus schedules
+        val autoFocusSchedules = savedPreferencesLoader.loadAutoFocusHoursList()
+        focusModeBlocker.refreshCheatHoursData(autoFocusSchedules)
+
+        // Check if NFC auto-focus schedule should be active
+        checkAndActivateNFCSchedule()
 
         val selectedFocusModeApps = savedPreferencesLoader.getFocusModeSelectedApps().toHashSet()
         val focusModeData = savedPreferencesLoader.getFocusModeData()
+
+        Log.d("AppBlockerService", "Setting up focus mode: isTurnedOn=${focusModeData.isTurnedOn}, modeType=${focusModeData.modeType}, selectedApps=${selectedFocusModeApps.size} apps")
 
         // As all apps wil get blocked except the selected ones, add essential packages that need not be blocked
         // to the list of selected apps
@@ -216,6 +263,42 @@ class AppBlockerService : BaseBlockingService() {
         focusModeData.selectedApps = selectedFocusModeApps
         focusModeBlocker.focusModeData = focusModeData
 
+        Log.d("AppBlockerService", "Focus mode setup complete: ${focusModeBlocker.focusModeData}")
+    }
+    
+    private fun checkAndActivateNFCSchedule() {
+        val nfcSchedules = savedPreferencesLoader.loadNFCAutoFocusSchedules()
+        if (nfcSchedules.isEmpty()) return
+        
+        // Check if suppressed
+        val suppressedUntil = savedPreferencesLoader.getNFCAutoFocusSuppressedUntil()
+        if (suppressedUntil > System.currentTimeMillis()) {
+            Log.d("AppBlockerService", "NFC schedules suppressed until $suppressedUntil")
+            return
+        }
+        
+        // Check if already active manually
+        if (savedPreferencesLoader.getNFCActive()) {
+            Log.d("AppBlockerService", "NFC focus already active manually")
+            return
+        }
+        
+        // Get current time in minutes from midnight
+        val calendar = java.util.Calendar.getInstance()
+        val currentMinutes = calendar.get(java.util.Calendar.HOUR_OF_DAY) * 60 + calendar.get(java.util.Calendar.MINUTE)
+        
+        // Check if any schedule should be active now
+        for (schedule in nfcSchedules) {
+            if (currentMinutes >= schedule.startTimeInMins) {
+                Log.d("AppBlockerService", "NFC schedule active: ${schedule.title} at ${schedule.startTimeInMins}")
+                // Auto-start NFC focus mode using NFCFocusToggle
+                val nfcToggle = nethical.digipaws.utils.NFCFocusToggle(this)
+                nfcToggle.startManualFocus()
+                // Set the start method to AUTO_SCHEDULE
+                savedPreferencesLoader.saveNFCFocusStartMethod(nethical.digipaws.utils.NFCFocusToggle.NFCFocusStartMethod.AUTO_SCHEDULE.toString())
+                break
+            }
+        }
     }
 
     override fun onDestroy() {
